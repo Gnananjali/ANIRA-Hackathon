@@ -21,7 +21,7 @@ export function Topbar({ health }: { health: HealthState }) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Badge variant="demo">Demo data</Badge>
+          <Badge variant="muted">Local session</Badge>
           <StatusPill health={health} />
           <div className="grid h-8 w-8 place-items-center rounded-full border border-line bg-white/[0.03] text-[10px] font-semibold tracking-wide text-slate-300">
             AN

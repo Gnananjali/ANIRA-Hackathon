@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { exitLabel, formatDuration, isCheckPassed } from '../checkFormat';
 import type { ActivityKind, CheckPreparation, CheckRunResult } from '../types';
+import type { WorkflowPhase } from '../workflow';
 import { Badge } from './Badge';
 import { IconAlert, IconCheck, IconClock, IconLock, IconTerminal } from './icons';
 import { Panel } from './Panel';
@@ -58,9 +59,17 @@ function OutputBlock({ label, value }: { label: string; value: string }) {
 interface VerificationPanelProps {
   root: string | null;
   onLog: (kind: ActivityKind, message: string) => void;
+  onCheckState: (state: {
+    phase: WorkflowPhase;
+    result: CheckRunResult | null;
+  }) => void;
 }
 
-export function VerificationPanel({ root, onLog }: VerificationPanelProps) {
+export function VerificationPanel({
+  root,
+  onLog,
+  onCheckState,
+}: VerificationPanelProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [preparation, setPreparation] = useState<CheckPreparation | null>(null);
   const [result, setResult] = useState<CheckRunResult | null>(null);
@@ -72,6 +81,10 @@ export function VerificationPanel({ root, onLog }: VerificationPanelProps) {
     setResult(null);
     setMessage(null);
   }, [root]);
+
+  useEffect(() => {
+    onCheckState({ phase, result });
+  }, [phase, result, onCheckState]);
 
   function reset() {
     setPhase('idle');
@@ -369,6 +382,12 @@ export function VerificationPanel({ root, onLog }: VerificationPanelProps) {
             <span className="font-mono">npm test</span>. Nothing else was executed.
           </p>
 
+          {!passed ? (
+            <p className="rounded-lg border border-amber/20 bg-amber/[0.06] px-3 py-2 text-[10.5px] leading-relaxed text-amber-200">
+              The approval was consumed by this run. Prepare a new check to retry.
+            </p>
+          ) : null}
+
           <OutputBlock label="stdout" value={result.stdout} />
           <OutputBlock label="stderr" value={result.stderr} />
 
@@ -383,7 +402,7 @@ export function VerificationPanel({ root, onLog }: VerificationPanelProps) {
             onClick={reset}
             className="rounded-lg border border-line px-3 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
           >
-            Run again
+            {passed ? 'Run again' : 'Prepare again'}
           </button>
         </div>
       ) : null}

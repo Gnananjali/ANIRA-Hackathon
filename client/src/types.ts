@@ -55,7 +55,7 @@ export interface PlanReport {
   note: string;
 }
 
-export type ActivityKind = 'system' | 'user' | 'demo';
+export type ActivityKind = 'system' | 'user';
 
 export interface ActivityEntry {
   id: string;

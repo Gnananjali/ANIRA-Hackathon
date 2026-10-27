@@ -1,16 +1,28 @@
 # ANIRA
 
-A JARVIS-inspired desktop assistant built around one loop:
+A JARVIS-inspired desktop assistant built around one guarded loop:
 
-**PLAN → APPROVE → EXECUTE → VERIFY → UNDO**
+**INSPECT → PLAN → APPROVE → EXECUTE → VERIFY → RECOVER/UNDO**
 
 This repository is the **scaffold milestone**. It ships a working dashboard, a backend health
-check, read-only repository inspection, and **one explicitly approved project check**. It does
-**not** edit files, run arbitrary commands, control the desktop, capture voice, or call any model.
+check, read-only repository inspection, evidence-backed plan reports, and **one explicitly
+approved project check**. It does **not** edit files, execute plan steps, run arbitrary commands,
+control the desktop, capture voice, or call any model.
 
-> **Demo data notice:** planned actions are illustrative. Activity entries tagged **LIVE** are real
-> UI events; entries tagged **DEMO** are not. A verification result is real only after you approve
-> and run the single allowlisted check.
+> **Scope notice:** proposed plan steps are drafts and are never executed. Activity entries are
+> real UI events from this session. A verification result is real only after you approve and run
+> the single allowlisted check.
+
+## Workflow status
+
+| Stage | Status | What actually happens |
+| --- | --- | --- |
+| Inspect | **Implemented** | Scans an absolute folder (metadata only), skips `node_modules`, `.git`, `dist`, `build`, caps the scan, and detects stack signals from file names. |
+| Plan | **Implemented, deterministic** | Keyword constraints plus scan facts produce a draft report with facts, inferences, limits, and proposed steps. No model is called. |
+| Approve | **Check only** | The server issues a single-use, 2-minute approval for `node-test`. Plan-step approval is not implemented. |
+| Execute | **Check only** | Runs the fixed `npm test` command once, with no shell, a 60 s timeout, and a 128 KB output cap. Plan-step execution is not implemented. |
+| Verify | **Check only** | Shows the real exit code, duration, stdout, and stderr. A clean exit 0 is the only pass. It verifies the repository test command, not every proposed plan step. |
+| Recover/Undo | **Partial** | Undo is not applicable because ANIRA makes no changes. After a failed or timed-out check, the consumed approval must be replaced by preparing a new check. |
 
 ## Stack
 
@@ -143,6 +155,10 @@ Both endpoints require the `X-ANIRA-Approval: 1` header and reject unknown origi
 > controls which command runs, not what the project's test script does. ANIRA itself never edits
 > files or runs arbitrary commands.
 
+> **Local-only:** the API has no authentication. It binds to `127.0.0.1` and must not be exposed
+> through a tunnel, reverse proxy, or public host. Doing so would let anyone scan local folders and
+> run `npm test` in them.
+
 Safety properties:
 
 - The request never carries a command or arguments; the server maps `node-test` to `npm test`.
@@ -173,7 +189,9 @@ Safety properties:
 │   │   ├── components/    dashboard panels and UI primitives
 │   │   ├── hooks/         useHealth polling hook
 │   │   ├── App.tsx        layout and local UI state
-│   │   ├── demoData.ts    clearly-labelled mock plan and checks
+│   │   ├── checkFormat.ts exit-code and duration formatting
+│   │   ├── demoData.ts    deterministic plan/report builder
+│   │   ├── workflow.ts    derived six-stage workflow state
 │   │   ├── index.css      Tailwind theme and global styles
 │   │   └── types.ts       shared client types
 │   ├── index.html
@@ -201,9 +219,10 @@ Safety properties:
 - Voice input or speech synthesis
 - Desktop control, screen capture, or UI automation
 - Arbitrary shell execution or request-supplied commands
-- File edits by ANIRA
-- Scheduling, background runs, or automatic execution
+- Plan-step execution, file edits by ANIRA, or undo/rollback
+- Scheduling, background runs, automatic execution, or cancellation
 - Persistence, authentication, or a database
+- Remote hosting, tunnels, or multi-user access
 
-These are later milestones. The current UI labels every placeholder so the scaffold cannot be
-mistaken for an unrestricted executor.
+These are later milestones. The UI distinguishes proposed plan steps from the one implemented
+check, and never presents a non-zero or interrupted run as passed.

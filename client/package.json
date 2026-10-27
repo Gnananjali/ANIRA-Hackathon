@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --import tsx --test tests/demoData.test.ts tests/planReport.test.ts tests/checkFormat.test.ts",
+    "test": "node --import tsx --test tests/demoData.test.ts tests/planReport.test.ts tests/checkFormat.test.ts tests/workflow.test.ts",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json"
   },
   "dependencies": {

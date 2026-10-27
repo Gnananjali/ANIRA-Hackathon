@@ -1,4 +1,5 @@
-import type { PlanReport, Risk } from '../types';
+import { exitLabel, formatDuration, isCheckPassed } from '../checkFormat';
+import type { CheckRunResult, PlanReport, Risk } from '../types';
 import { Badge } from './Badge';
 import { IconFile, IconLock, IconTerminal } from './icons';
 import { Panel } from './Panel';
@@ -9,10 +10,18 @@ const riskStyles: Record<Risk, string> = {
   high: 'border-rose/25 bg-rose/[0.06] text-rose-300',
 };
 
-export function PlanPanel({ report }: { report: PlanReport | null }) {
+interface PlanPanelProps {
+  report: PlanReport | null;
+  checkResult: CheckRunResult | null;
+}
+
+export function PlanPanel({ report, checkResult }: PlanPanelProps) {
   const plan = report?.steps ?? null;
   const readOnly = Boolean(plan && plan.length > 0 && plan.every((step) => step.kind === 'read'));
   const findings = report ? [...report.facts, ...report.inferences] : [];
+  const verified = checkResult
+    ? isCheckPassed(checkResult.exitCode, checkResult.timedOut)
+    : false;
 
   return (
     <Panel
@@ -40,6 +49,31 @@ export function PlanPanel({ report }: { report: PlanReport | null }) {
       }
       bodyClassName="px-5 py-4"
     >
+      {report && checkResult ? (
+        <div
+          className={`mb-4 rounded-lg border px-3 py-2 ${
+            verified
+              ? 'border-mint/25 bg-mint/[0.04]'
+              : 'border-rose/25 bg-rose/[0.05]'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant={verified ? 'ok' : 'danger'}>
+                {exitLabel(checkResult.exitCode, checkResult.timedOut)}
+              </Badge>
+              <span className="tnum font-mono text-[10px] text-slate-500">
+                {formatDuration(checkResult.durationMs)}
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-slate-500">npm test</span>
+          </div>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            This verifies the repository test command, not every proposed plan step.
+          </p>
+        </div>
+      ) : null}
+
       {report && findings.length > 0 ? (
         <div className="mb-4">
           <div className="flex items-center justify-between gap-2">

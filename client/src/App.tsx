@@ -13,9 +13,11 @@ import { Topbar } from './components/Topbar';
 import { VerificationPanel } from './components/VerificationPanel';
 import { buildPlanReport } from './demoData';
 import { useHealth } from './hooks/useHealth';
+import { deriveWorkflowState, type WorkflowPhase } from './workflow';
 import type {
   ActivityEntry,
   ActivityKind,
+  CheckRunResult,
   InspectionResult,
   PlanReport,
 } from './types';
@@ -34,20 +36,33 @@ export default function App() {
   const [task, setTask] = useState('');
   const [inspection, setInspection] = useState<InspectionResult | null>(null);
   const [report, setReport] = useState<PlanReport | null>(null);
+  const [checkPhase, setCheckPhase] = useState<WorkflowPhase>('idle');
+  const [checkResult, setCheckResult] = useState<CheckRunResult | null>(null);
   const [entries, setEntries] = useState<ActivityEntry[]>(() => [
     createEntry(
       'system',
-      'ANIRA scaffold loaded — execution, model calls and desktop control are disabled.',
-    ),
-    createEntry(
-      'demo',
-      'Panel content is illustrative. Entries tagged DEMO are not real events.',
+      'ANIRA loaded — one allowlisted project check can run after approval. No arbitrary commands or file edits.',
     ),
   ]);
 
   const log = useCallback((kind: ActivityKind, message: string) => {
     setEntries((previous) => [createEntry(kind, message), ...previous].slice(0, 50));
   }, []);
+
+  const handleCheckState = useCallback(
+    (state: { phase: WorkflowPhase; result: CheckRunResult | null }) => {
+      setCheckPhase(state.phase);
+      setCheckResult(state.result);
+    },
+    [],
+  );
+
+  const stages = deriveWorkflowState({
+    inspected: Boolean(inspection),
+    hasPlan: Boolean(report),
+    checkPhase,
+    checkResult,
+  });
 
   const lastHealthStatus = useRef(health.status);
 
@@ -63,7 +78,7 @@ export default function App() {
         'system',
         `Backend health check passed (${health.payload?.service ?? 'anira-server'} v${
           health.payload?.version ?? '0.1.0'
-        }) — scaffold mode, execution disabled.`,
+        }) — one allowlisted check available.`,
       );
     }
 
@@ -81,10 +96,10 @@ export default function App() {
     setReport(buildPlanReport(trimmed, inspection));
     const shortened = trimmed.replace(/\s+/g, ' ');
     log(
-      'demo',
+      'user',
       `Draft plan generated for “${shortened.length > 72 ? `${shortened.slice(0, 72)}…` : shortened}” ${
         inspection ? `from the ${inspection.name} scan` : 'without a repository scan'
-      } — no actions were queued or executed.`,
+      } — no actions were queued.`,
     );
   }
 
@@ -141,7 +156,7 @@ export default function App() {
             </div>
 
             <div className="mt-6 border-t border-line/50 pt-5">
-              <PipelineStrip />
+              <PipelineStrip stages={stages} />
             </div>
           </section>
 
@@ -154,13 +169,17 @@ export default function App() {
                 onClear={handleClear}
                 hasPlan={Boolean(report)}
               />
-              <PlanPanel report={report} />
+              <PlanPanel report={report} checkResult={checkResult} />
               <RepositoryPanel onLog={log} onInspected={setInspection} />
             </div>
 
             <div className="space-y-6 xl:col-span-4">
               <ExecutionPanel plan={report?.steps ?? null} />
-              <VerificationPanel root={inspection?.root ?? null} onLog={log} />
+              <VerificationPanel
+                root={inspection?.root ?? null}
+                onLog={log}
+                onCheckState={handleCheckState}
+              />
               <ActivityLog entries={entries} />
             </div>
           </div>

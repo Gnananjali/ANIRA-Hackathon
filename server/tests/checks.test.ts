@@ -210,11 +210,30 @@ describe('approval guard', () => {
 
     assert.equal(result.status, 200);
   });
+
+  it('rejects a disallowed origin on the run endpoint', async () => {
+    const root = await makeFixture({ script: 'process.exit(0);' });
+    const prepared = await prepare(shared.baseUrl, root);
+
+    const result = await run(shared.baseUrl, prepared.body.approvalId, {
+      ...HEADERS,
+      Origin: 'https://evil.example',
+    });
+
+    assert.equal(result.status, 403);
+    assert.equal(result.body.error, 'origin_not_allowed');
+  });
 });
 
 describe('approval lifecycle', () => {
   it('rejects unknown approvals', async () => {
     const result = await run(shared.baseUrl, 'not-a-real-approval');
+    assert.equal(result.status, 400);
+    assert.equal(result.body.error, 'approval_invalid');
+  });
+
+  it('rejects a non-string approval id', async () => {
+    const result = await run(shared.baseUrl, 123);
     assert.equal(result.status, 400);
     assert.equal(result.body.error, 'approval_invalid');
   });
@@ -250,6 +269,26 @@ describe('approval lifecycle', () => {
     assert.equal(second.status, 400);
     assert.equal(second.body.error, 'approval_invalid');
   });
+});
+
+describe('npm availability', () => {
+  for (const reason of ['npm_not_found', 'unsupported_platform'] as const) {
+    it(`reports ${reason}`, { timeout: 20_000 }, async () => {
+      const root = await makeFixture({ script: 'process.exit(0);' });
+      const app = await startApp({
+        checkService: createCheckService({ npm: { ok: false, reason } }),
+      });
+
+      try {
+        const result = await prepare(app.baseUrl, root);
+        assert.equal(result.status, 409);
+        assert.equal(result.body.error, 'check_unavailable');
+        assert.equal(result.body.reason, reason);
+      } finally {
+        await app.close();
+      }
+    });
+  }
 });
 
 describe('check execution', () => {
@@ -308,7 +347,10 @@ describe('check execution', () => {
     process.env.ANIRA_SECRET_TEST = 'should-not-leak';
     try {
       const prepared = await prepare(shared.baseUrl, root);
-      const result = await run(shared.baseUrl, prepared.body.approvalId);
+      const result = await run(shared.baseUrl, prepared.body.approvalId, HEADERS, {
+        root: 'C:\\Windows',
+        checkId: 'some-other-check',
+      });
 
       assert.equal(result.status, 200);
       assert.match(result.body.stdout, /sentinel=absent/);

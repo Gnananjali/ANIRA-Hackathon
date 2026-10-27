@@ -1,11 +1,10 @@
-import type { ActivityKind, ActivityEntry } from '../types';
+import type { ActivityEntry, ActivityKind } from '../types';
 import { Badge } from './Badge';
 import { Panel } from './Panel';
 
 const dotStyles: Record<ActivityKind, string> = {
   system: 'bg-mint',
   user: 'bg-sky',
-  demo: 'bg-amber',
 };
 
 export function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
@@ -25,9 +24,7 @@ export function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
                 <time className="tnum font-mono text-[10px] text-slate-500">
                   {new Date(entry.at).toLocaleTimeString([], { hour12: false })}
                 </time>
-                <Badge variant={entry.kind === 'demo' ? 'demo' : 'ok'}>
-                  {entry.kind === 'demo' ? 'Demo' : 'Live'}
-                </Badge>
+                <Badge variant="ok">Live</Badge>
               </div>
               <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{entry.message}</p>
             </div>
@@ -36,7 +33,7 @@ export function ActivityLog({ entries }: { entries: ActivityEntry[] }) {
       </ul>
 
       <p className="mt-3 border-t border-line/60 pt-3 text-[10px] leading-relaxed text-slate-500">
-        LIVE entries are real UI events. DEMO entries describe illustrative activity only.
+        Every entry is a real UI event from this session. The log is not persisted.
       </p>
     </Panel>
   );

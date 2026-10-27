@@ -35,7 +35,7 @@ export function TaskComposer({
     <Panel
       title="Task brief"
       subtitle="Describe the outcome. The draft plan comes from a fixed local template."
-      badge={<Badge variant="demo">Demo</Badge>}
+      badge={<Badge variant="muted">Local</Badge>}
     >
       <form
         onSubmit={(event) => {
