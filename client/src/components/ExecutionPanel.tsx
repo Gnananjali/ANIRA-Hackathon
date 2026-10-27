@@ -8,7 +8,7 @@ export function ExecutionPanel({ plan }: { plan: PlanStep[] | null }) {
     { label: 'Plan', value: plan ? `${plan.length} proposed steps` : 'No draft' },
     { label: 'Queue', value: 'Not queued' },
     { label: 'Worker', value: 'Not available' },
-    { label: 'Model calls', value: 'Disabled' },
+    { label: 'Execution model calls', value: 'Disabled' },
     { label: 'Undo', value: 'Not applicable — no changes' },
   ];
 
@@ -25,7 +25,7 @@ export function ExecutionPanel({ plan }: { plan: PlanStep[] | null }) {
         <div>
           <p className="text-sm font-medium text-slate-200">No plan execution</p>
           <p className="mt-1 text-[11.5px] leading-relaxed text-slate-400">
-            Only the project check in Verification can run, and only after you approve it.
+            Plan steps do not run. The project check and Controlled edit run only after approval.
           </p>
         </div>
       </div>

@@ -68,7 +68,8 @@ export function Sidebar() {
           <span className="text-[11px] font-semibold">Guarded execution</span>
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-          One allowlisted check runs only after approval. No shell, edits or desktop control.
+          One allowlisted check and one previewed edit run only after approval. No shell or
+          desktop control.
         </p>
       </div>
 

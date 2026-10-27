@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test tests/app.test.ts tests/inspect.test.ts tests/checks.test.ts",
+    "test": "node --import tsx --test tests/app.test.ts tests/inspect.test.ts tests/checks.test.ts tests/edits.test.ts tests/planner.test.ts tests/evidence.test.ts tests/recovery.test.ts",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json"
   },
   "dependencies": {

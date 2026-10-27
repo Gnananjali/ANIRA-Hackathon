@@ -88,7 +88,7 @@ function splitClauses(text: string): string[] {
     .filter((clause) => clause.length > 0);
 }
 
-type StepTemplate = Omit<PlanStep, 'id' | 'status'>;
+type StepTemplate = Omit<PlanStep, 'id' | 'status' | 'dependsOn'>;
 
 function inspectStep(subject: string): StepTemplate {
   const shortened = subject.length > 88 ? `${subject.slice(0, 88)}…` : subject;
@@ -99,6 +99,8 @@ function inspectStep(subject: string): StepTemplate {
     tool: 'filesystem.read',
     risk: 'low',
     kind: 'read',
+    actionType: 'read',
+    verification: ['The cited files appear in the scan'],
   };
 }
 
@@ -113,6 +115,8 @@ function writeStep(destructive: boolean): StepTemplate {
     tool: 'workspace.patch',
     risk: destructive ? 'high' : 'medium',
     kind: 'write',
+    actionType: 'edit',
+    verification: ['The approved edit matches the reviewed diff'],
   };
 }
 
@@ -123,6 +127,8 @@ function executeStep(): StepTemplate {
     tool: 'checks.run',
     risk: 'medium',
     kind: 'execute',
+    actionType: 'check',
+    verification: ['The declared check exits 0'],
   };
 }
 
@@ -132,6 +138,8 @@ const SUMMARIZE_STEP: StepTemplate = {
   tool: 'report.compose',
   risk: 'low',
   kind: 'read',
+  actionType: 'report',
+  verification: ['The summary cites only scanned paths'],
 };
 
 const EVIDENCE_STEP: StepTemplate = {
@@ -140,6 +148,8 @@ const EVIDENCE_STEP: StepTemplate = {
   tool: 'evidence.collect',
   risk: 'low',
   kind: 'read',
+  actionType: 'report',
+  verification: ['Hashes and output are recorded'],
 };
 
 const STOP_WORDS = new Set([
@@ -483,6 +493,8 @@ function buildSteps(
       tool: 'filesystem.read',
       risk: 'low',
       kind: 'read',
+      actionType: 'read',
+      verification: ['Each cited path appears in the scan'],
       evidence: relevant,
     });
   } else {
@@ -509,11 +521,20 @@ function buildSteps(
     EVIDENCE_STEP,
   );
 
-  return templates.map((step, index) => ({
-    ...step,
-    id: `step-${index + 1}`,
-    status: 'proposed' as const,
-  }));
+  const planned: PlanStep[] = [];
+
+  for (const template of templates) {
+    const id = `step-${planned.length + 1}`;
+    planned.push({
+      ...template,
+      id,
+      status: 'proposed',
+      dependsOn:
+        planned.length > 0 ? [planned[planned.length - 1].id] : [],
+    });
+  }
+
+  return planned;
 }
 
 /**
@@ -541,12 +562,15 @@ export function buildPlanReport(
           truncated: scan.truncated,
         }
       : null,
+    planner: 'deterministic',
+    assumptions: [],
+    unknowns: [],
     facts: scan ? buildFacts(scan) : [],
     inferences: buildInferences(scan),
     limitations: buildLimitations(scan),
     steps: buildSteps(subject, scan, constraints),
     constraints,
-    note: 'Read-only plan. No files were modified and no checks were run.',
+    note: 'Proposal-only plan. No files were modified and no checks were run.',
   };
 }
 

@@ -11,6 +11,9 @@ interface TaskComposerProps {
   onGenerate: () => void;
   onClear: () => void;
   hasPlan: boolean;
+  planning: boolean;
+  plannerMode: 'ai' | 'local';
+  plannerHint: string;
 }
 
 export function TaskComposer({
@@ -19,8 +22,11 @@ export function TaskComposer({
   onGenerate,
   onClear,
   hasPlan,
+  planning,
+  plannerMode,
+  plannerHint,
 }: TaskComposerProps) {
-  const disabled = task.trim().length === 0;
+  const disabled = task.trim().length === 0 || planning;
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -34,8 +40,14 @@ export function TaskComposer({
   return (
     <Panel
       title="Task brief"
-      subtitle="Describe the outcome. The draft plan comes from a fixed local template."
-      badge={<Badge variant="muted">Local</Badge>}
+      subtitle="Describe the outcome. Plans are proposals only and never execute."
+      badge={
+        plannerMode === 'ai' ? (
+          <Badge variant="info">AI</Badge>
+        ) : (
+          <Badge variant="muted">Local</Badge>
+        )
+      }
     >
       <form
         onSubmit={(event) => {
@@ -67,7 +79,8 @@ export function TaskComposer({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="rounded-lg border border-line px-3 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+                  disabled={planning}
+                  className="rounded-lg border border-line px-3 py-1.5 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600"
                 >
                   Clear
                 </button>
@@ -75,11 +88,16 @@ export function TaskComposer({
               <button
                 type="submit"
                 disabled={disabled}
+                aria-busy={planning}
                 className="inline-flex items-center gap-2 rounded-lg border border-mint/30 bg-mint/15 px-3 py-1.5 text-[11px] font-semibold text-mint transition-colors hover:bg-mint/20 disabled:cursor-not-allowed disabled:border-line disabled:bg-white/[0.02] disabled:text-slate-600"
               >
-                <IconSpark className="h-3.5 w-3.5" />
-                Generate draft plan
-                <IconArrowRight className="h-3.5 w-3.5" />
+                {planning ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-mint animate-pulse-dot" />
+                ) : (
+                  <IconSpark className="h-3.5 w-3.5" />
+                )}
+                {planning ? 'Planning…' : 'Generate plan'}
+                {planning ? null : <IconArrowRight className="h-3.5 w-3.5" />}
               </button>
             </div>
           </div>
@@ -100,7 +118,7 @@ export function TaskComposer({
         </div>
 
         <p id="task-brief-note" className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          Local template · no model call · nothing is queued or executed. Ctrl + Enter drafts a plan.
+          {plannerHint} Ctrl + Enter drafts a plan.
         </p>
       </form>
     </Panel>

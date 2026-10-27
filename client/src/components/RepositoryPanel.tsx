@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { formatBytes } from '../demoData';
+import { evidenceHeaders } from '../evidenceSession';
 import type { ActivityKind, InspectionResult } from '../types';
 import { Badge } from './Badge';
 import { IconFile } from './icons';
@@ -39,7 +40,7 @@ export function RepositoryPanel({ onLog, onInspected }: RepositoryPanelProps) {
     try {
       const response = await fetch('/api/inspect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: evidenceHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ path: requested }),
       });
 

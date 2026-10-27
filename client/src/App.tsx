@@ -2,17 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ActivityLog } from './components/ActivityLog';
 import { Badge } from './components/Badge';
+import { ControlledEditPanel } from './components/ControlledEditPanel';
+import { EvidencePanel } from './components/EvidencePanel';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { IconAlert } from './components/icons';
 import { PipelineStrip } from './components/PipelineStrip';
 import { PlanPanel } from './components/PlanPanel';
+import { PlannerConsent } from './components/PlannerConsent';
 import { RepositoryPanel } from './components/RepositoryPanel';
 import { Sidebar } from './components/Sidebar';
 import { TaskComposer } from './components/TaskComposer';
 import { Topbar } from './components/Topbar';
 import { VerificationPanel } from './components/VerificationPanel';
+import { consentRequired, grantExternalConsent } from './consent';
 import { buildPlanReport } from './demoData';
 import { useHealth } from './hooks/useHealth';
+import { buildAiReport, buildFallbackReport, fallbackLabel } from './planMapping';
+import {
+  createSingleFlight,
+  fetchPlannerConfig,
+  requestPlan,
+  type PlannerConfig,
+} from './plannerClient';
 import { deriveWorkflowState, type WorkflowPhase } from './workflow';
 import type {
   ActivityEntry,
@@ -38,15 +49,22 @@ export default function App() {
   const [report, setReport] = useState<PlanReport | null>(null);
   const [checkPhase, setCheckPhase] = useState<WorkflowPhase>('idle');
   const [checkResult, setCheckResult] = useState<CheckRunResult | null>(null);
+  const [plannerConfig, setPlannerConfig] = useState<PlannerConfig | null>(null);
+  const [plannerConfigLoaded, setPlannerConfigLoaded] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const singleFlight = useRef(createSingleFlight()).current;
+  const [evidenceVersion, setEvidenceVersion] = useState(0);
   const [entries, setEntries] = useState<ActivityEntry[]>(() => [
     createEntry(
       'system',
-      'ANIRA loaded — one allowlisted project check can run after approval. No arbitrary commands or file edits.',
+      'ANIRA loaded — guarded check and edit flows are available, and plans are proposals only.',
     ),
   ]);
 
   const log = useCallback((kind: ActivityKind, message: string) => {
     setEntries((previous) => [createEntry(kind, message), ...previous].slice(0, 50));
+    setEvidenceVersion((value) => value + 1);
   }, []);
 
   const handleCheckState = useCallback(
@@ -63,6 +81,17 @@ export default function App() {
     checkPhase,
     checkResult,
   });
+
+  const plannerMode: 'ai' | 'local' = plannerConfig?.available ? 'ai' : 'local';
+  const plannerHint = !plannerConfigLoaded
+    ? 'Checking planner availability…'
+    : plannerConfig?.available
+      ? plannerConfig.provider === 'local'
+        ? 'Local AI model · repository metadata stays on this machine · deterministic fallback.'
+        : 'External AI provider · first use asks for consent · deterministic fallback.'
+      : plannerConfig
+        ? 'No AI provider configured · deterministic planner in use.'
+        : 'Planner status unavailable · deterministic planner in use.';
 
   const lastHealthStatus = useRef(health.status);
 
@@ -87,25 +116,149 @@ export default function App() {
     }
   }, [health.status, health.payload, log]);
 
-  function handleGenerate() {
-    const trimmed = task.trim();
-    if (!trimmed) {
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchPlannerConfig().then((config) => {
+      if (!cancelled) {
+        setPlannerConfig(config);
+        setPlannerConfigLoaded(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function sessionStorageOrNull(): Storage | null {
+    try {
+      return window.sessionStorage;
+    } catch {
+      return null;
+    }
+  }
+
+  function logPlanReport(next: PlanReport) {
+    log(
+      'user',
+      next.planner === 'ai'
+        ? `AI plan generated with ${next.plannerModel ?? 'the configured model'} — proposals only.`
+        : `Local plan generated (${fallbackLabel(next.plannerReason)}).`,
+    );
+  }
+
+  function useLocalPlan(brief: string, reason: string) {
+    const next = buildFallbackReport(buildPlanReport(brief, inspection), reason);
+    setReport(next);
+    logPlanReport(next);
+  }
+
+  async function runPlan(brief: string) {
+    if (!inspection) {
+      useLocalPlan(brief, 'no_inspection');
       return;
     }
 
-    setReport(buildPlanReport(trimmed, inspection));
-    const shortened = trimmed.replace(/\s+/g, ' ');
-    log(
-      'user',
-      `Draft plan generated for “${shortened.length > 72 ? `${shortened.slice(0, 72)}…` : shortened}” ${
-        inspection ? `from the ${inspection.name} scan` : 'without a repository scan'
-      } — no actions were queued.`,
-    );
+    const root = inspection.root;
+    const base = buildPlanReport(brief, inspection);
+
+    try {
+      const outcome = await singleFlight(async () => {
+        setPlanning(true);
+
+        try {
+          return await requestPlan({ root, brief });
+        } finally {
+          setPlanning(false);
+        }
+      });
+
+      if (outcome === null) {
+        return;
+      }
+
+      if (!outcome.ok) {
+        const next = buildFallbackReport(base, outcome.reason);
+        setReport(next);
+        logPlanReport(next);
+        return;
+      }
+
+      if (outcome.response.planner === 'ai') {
+        const next = buildAiReport(base, outcome.response, plannerConfig?.provider);
+        setReport(next);
+        logPlanReport(next);
+        return;
+      }
+
+      const next = buildFallbackReport(base, outcome.response.reason);
+      setReport(next);
+      logPlanReport(next);
+    } catch {
+      const next = buildFallbackReport(base, 'request_failed');
+      setReport(next);
+      logPlanReport(next);
+    }
+  }
+
+  function handleGenerate() {
+    const brief = task.trim();
+
+    if (!brief || planning) {
+      return;
+    }
+
+    if (!inspection) {
+      useLocalPlan(brief, 'no_inspection');
+      return;
+    }
+
+    if (!plannerConfigLoaded || !plannerConfig) {
+      useLocalPlan(brief, 'planner_unavailable');
+      return;
+    }
+
+    if (!plannerConfig.available) {
+      // Ask the local server for the fallback so the planning event is
+      // recorded. It returns no_api_key without contacting any provider.
+      void runPlan(brief);
+      return;
+    }
+
+    if (consentRequired(plannerConfig.provider, sessionStorageOrNull())) {
+      setPendingPlan(brief);
+      return;
+    }
+
+    void runPlan(brief);
+  }
+
+  function handleConsentAllow() {
+    if (!pendingPlan) {
+      return;
+    }
+
+    grantExternalConsent(sessionStorageOrNull());
+    const brief = pendingPlan;
+    setPendingPlan(null);
+    void runPlan(brief);
+  }
+
+  function handleConsentLocal() {
+    if (!pendingPlan) {
+      return;
+    }
+
+    const brief = pendingPlan;
+    setPendingPlan(null);
+    useLocalPlan(brief, 'user_declined_external');
   }
 
   function handleClear() {
     setTask('');
     setReport(null);
+    setPendingPlan(null);
     log('user', 'Cleared the task brief and draft plan.');
   }
 
@@ -121,10 +274,12 @@ export default function App() {
             <IconAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <p>
               <span className="font-semibold uppercase tracking-[0.14em]">Guarded scaffold</span> —
-              ANIRA cannot edit files, run arbitrary commands or call a model. Planned actions are
-              illustrative; the Verification panel can run one allowlisted{' '}
-              <span className="font-mono">npm test</span> check after approval, and that check
-              executes repository code. Activity entries tagged LIVE are real UI events.
+              ANIRA cannot run arbitrary commands or control your desktop. AI planning may
+              call the configured model; external providers require consent, and proposed
+              steps never execute. The Verification panel can run one allowlisted{' '}
+              <span className="font-mono">npm test</span> check after approval; Controlled edit can
+              rewrite one existing text file after a server-generated diff. Both act on your
+              machine, only after approval. Activity entries are real UI events.
             </p>
           </div>
         </div>
@@ -144,19 +299,23 @@ export default function App() {
                 </h1>
                 <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-slate-400">
                   ANIRA is built around one loop: plan, approve, execute, verify, undo. This
-                  milestone ships the shell, the API heartbeat and one explicitly approved project
-                  check.
+                  milestone ships AI planning with a local fallback, the guarded API heartbeat,
+                  one explicitly approved project check, and one previewed file-edit lane.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 lg:justify-end">
                 <Badge variant="muted">Scaffold · v0.1.0</Badge>
                 <Badge variant="danger">Shell off</Badge>
-                <Badge variant="muted">Model calls off</Badge>
+                <Badge variant="muted">Planning only</Badge>
               </div>
             </div>
 
             <div className="mt-6 border-t border-line/50 pt-5">
               <PipelineStrip stages={stages} />
+              <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                Approve, Execute and Verify above track the project check. Controlled edits use a
+                separate approval loop below.
+              </p>
             </div>
           </section>
 
@@ -168,9 +327,17 @@ export default function App() {
                 onGenerate={handleGenerate}
                 onClear={handleClear}
                 hasPlan={Boolean(report)}
+                planning={planning}
+                plannerMode={plannerMode}
+                plannerHint={plannerHint}
               />
-              <PlanPanel report={report} checkResult={checkResult} />
+              <PlanPanel
+                report={report}
+                checkResult={checkResult}
+                planning={planning}
+              />
               <RepositoryPanel onLog={log} onInspected={setInspection} />
+              <ControlledEditPanel root={inspection?.root ?? null} onLog={log} />
             </div>
 
             <div className="space-y-6 xl:col-span-4">
@@ -181,18 +348,28 @@ export default function App() {
                 onCheckState={handleCheckState}
               />
               <ActivityLog entries={entries} />
+              <EvidencePanel refreshKey={evidenceVersion} />
             </div>
           </div>
 
           <footer className="flex flex-col gap-2 border-t border-line/60 pt-6 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              ANIRA · scaffold milestone · one approved project check · no arbitrary commands,
-              edits, model calls or desktop control
+              ANIRA · scaffold milestone · one approved check and one approved edit · no
+              arbitrary commands or desktop control; external providers require consent before planning
             </p>
             <p className="font-mono">PLAN → APPROVE → EXECUTE → VERIFY → UNDO</p>
           </footer>
         </main>
       </div>
+
+      {pendingPlan ? (
+        <PlannerConsent
+          model={plannerConfig?.model}
+          onAllow={handleConsentAllow}
+          onUseLocal={handleConsentLocal}
+          onCancel={() => setPendingPlan(null)}
+        />
+      ) : null}
     </div>
   );
 }

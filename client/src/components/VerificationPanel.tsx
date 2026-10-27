@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { exitLabel, formatDuration, isCheckPassed } from '../checkFormat';
+import { evidenceHeaders } from '../evidenceSession';
 import type { ActivityKind, CheckPreparation, CheckRunResult } from '../types';
 import type { WorkflowPhase } from '../workflow';
 import { Badge } from './Badge';
@@ -105,10 +106,10 @@ export function VerificationPanel({
     try {
       const response = await fetch('/api/checks/prepare', {
         method: 'POST',
-        headers: {
+        headers: evidenceHeaders({
           'Content-Type': 'application/json',
           'X-ANIRA-Approval': '1',
-        },
+        }),
         body: JSON.stringify({ root, checkId: 'node-test' }),
       });
 
@@ -145,10 +146,10 @@ export function VerificationPanel({
     try {
       const response = await fetch('/api/checks/run', {
         method: 'POST',
-        headers: {
+        headers: evidenceHeaders({
           'Content-Type': 'application/json',
           'X-ANIRA-Approval': '1',
-        },
+        }),
         body: JSON.stringify({ approvalId: preparation.approvalId }),
       });
 
