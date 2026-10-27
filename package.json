@@ -1,0 +1,25 @@
+{
+  "name": "anira",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ANIRA — a plan, approve, execute, verify, undo desktop assistant. Scaffold milestone.",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:client": "npm run dev -w client",
+    "dev:server": "npm run dev -w server",
+    "build": "npm run build -w server && npm run build -w client",
+    "check": "npm run check -w server && npm run check -w client",
+    "test": "npm run test -w server && npm run test -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}

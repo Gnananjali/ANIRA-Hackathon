@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.local
+.env
+.env.*
+!.env.example
+npm-debug.log*
+logs/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# Local backup files
+*.bak
